@@ -3,6 +3,8 @@ import io
 from pathlib import Path
 import folder_paths
 import zipfile
+# 追加部分対応
+import time
 
 from .utils import *
 
@@ -40,7 +42,7 @@ class ModelOption:
     def INPUT_TYPES(s):
         return {
             "required": {
-                "model": (["safe-diffusion", "nai-diffusion", "nai-diffusion-furry", "nai-diffusion-2", "nai-diffusion-furry-3", "nai-diffusion-3"], { "default": "nai-diffusion-3" }),
+                "model": (["safe-diffusion", "nai-diffusion", "nai-diffusion-furry", "nai-diffusion-2", "nai-diffusion-furry-3", "nai-diffusion-3","nai-diffusion-4-curated-preview"], { "default": "nai-diffusion-4-curated-preview" }),
             },
             "optional": { "option": ("NAID_OPTION",) },
         }
@@ -134,7 +136,7 @@ class NetworkOption:
         option["retry"] = retry
         return (option,)
 
-
+# v4に必要な
 class GenerateNAID:
     def __init__(self):
         self.access_token = get_access_token()
@@ -171,36 +173,91 @@ class GenerateNAID:
     def generate(self, limit_opus_free, width, height, positive, negative, steps, cfg, decrisper, variety, smea, sampler, scheduler, seed, uncond_scale, cfg_rescale, keep_alpha, option=None):
         width, height = calculate_resolution(width*height, (width, height))
 
-        # ref. novelai_api.ImagePreset
-        params = {
-            "params_version": 1,
-            "width": width,
-            "height": height,
-            "scale": cfg,
-            "sampler": sampler,
-            "steps": steps,
-            "seed": seed,
-            "n_samples": 1,
-            "ucPreset": 3,            #TODO: do I have to change it even if tags already typed by user?
-            "qualityToggle": False,   #TODO: do I have to change it even if tags already typed by user?
-            "sm": (smea == "SMEA" or smea == "SMEA+DYN") and sampler != "ddim",
-            "sm_dyn": smea == "SMEA+DYN" and sampler != "ddim",
-            "dynamic_thresholding": decrisper,
-            "skip_cfg_above_sigma": None,
-            "controlnet_strength": 1.0,
-            "legacy": False,
-            "add_original_image": False,
-            "cfg_rescale": cfg_rescale,
-            "noise_schedule": scheduler,
-            "legacy_v3_extend": False,      #TODO: find what it is
-            "uncond_scale": uncond_scale,
-            "negative_prompt": negative,
-            "reference_image_multiple": [], #NOTE: it is added on novelai webpage, even if ref.img not used
-            "reference_information_extracted_multiple": [],
-            "reference_strength_multiple": [],
-            "extra_noise_seed": seed,       #NOTE: it uses for img2img but not sure okay to put on txt2img
-        }
-        model = "nai-diffusion-3"
+        if "model" in option and option["model"] == 'nai-diffusion-4-curated-preview':
+            params = {
+                "params_version": 3, #v3までは1
+                "width": width,
+                "height": height,
+                "scale": cfg,
+                "sampler": sampler,
+                "steps": steps,
+                "seed": seed,
+                "n_samples": 1,
+                "ucPreset": 2,            #TODO: do I have to change it even if tags already typed by user? v3は3
+                "qualityToggle": False,   #TODO: do I have to change it even if tags already typed by user?
+                # "sm": (smea == "SMEA" or smea == "SMEA+DYN") and sampler != "ddim",
+                # "sm_dyn": smea == "SMEA+DYN" and sampler != "ddim",
+                "dynamic_thresholding": False , # decrisper,
+                "skip_cfg_above_sigma": None,
+                "controlnet_strength": 1.0,
+                "legacy": False,
+                "add_original_image": True, #v4系はtrue
+                "cfg_rescale": cfg_rescale,
+                "noise_schedule": scheduler,
+                "legacy_v3_extend": False,      #TODO: find what it is
+                "uncond_scale": uncond_scale,
+                "negative_prompt": negative,
+                "reference_image_multiple": [], #NOTE: it is added on novelai webpage, even if ref.img not used
+                "reference_information_extracted_multiple": [],
+                "reference_strength_multiple": [],
+                "extra_noise_seed": seed,       #NOTE: it uses for img2img but not sure okay to put on txt2img
+                # ここからv4系追加部分
+                "characterPrompts":[],
+                "deliberate_euler_ancestral_bug":False,
+                "prefer_brownian":True,
+                "use_coords":False,
+                "v4_prompt": {
+                    "caption": {
+                        "base_caption": positive,
+                        "char_captions": [
+                        ]
+                    },
+                    "use_coords": False,
+                    "use_order": True
+                },
+                "v4_negative_prompt": {
+                    "caption": {
+                        "base_caption": negative,
+                        "char_captions": [
+                        ]
+                    }
+                },
+
+
+            }
+        else:
+            # ref. novelai_api.ImagePreset
+
+            params = {
+                "params_version": 1,
+                "width": width,
+                "height": height,
+                "scale": cfg,
+                "sampler": sampler,
+                "steps": steps,
+                "seed": seed,
+                "n_samples": 1,
+                "ucPreset": 3,            #TODO: do I have to change it even if tags already typed by user?
+                "qualityToggle": False,   #TODO: do I have to change it even if tags already typed by user?
+                "sm": (smea == "SMEA" or smea == "SMEA+DYN") and sampler != "ddim",
+                "sm_dyn": smea == "SMEA+DYN" and sampler != "ddim",
+                "dynamic_thresholding": decrisper,
+                "skip_cfg_above_sigma": None,
+                "controlnet_strength": 1.0,
+                "legacy": False,
+                "add_original_image": False,
+                "cfg_rescale": cfg_rescale,
+                "noise_schedule": scheduler,
+                "legacy_v3_extend": False,      #TODO: find what it is
+                "uncond_scale": uncond_scale,
+                "negative_prompt": negative,
+                "reference_image_multiple": [], #NOTE: it is added on novelai webpage, even if ref.img not used
+                "reference_information_extracted_multiple": [],
+                "reference_strength_multiple": [],
+                "extra_noise_seed": seed,       #NOTE: it uses for img2img but not sure okay to put on txt2img
+            }
+            model = "nai-diffusion-3"
+
         action = "generate"
 
         if option:
@@ -231,7 +288,7 @@ class GenerateNAID:
         retry = option["retry"] if option and "retry" in option else None
 
         if limit_opus_free:
-            pixel_limit = 1024*1024 if model in ("nai-diffusion-2", "nai-diffusion-furry-3", "nai-diffusion-3",) else 640*640
+            pixel_limit = 1024*1024 if model in ("nai-diffusion-2", "nai-diffusion-furry-3", "nai-diffusion-3","nai-diffusion-4-curated-preview",) else 640*640
             if width * height > pixel_limit:
                 max_width, max_height = calculate_resolution(pixel_limit, (width, height))
                 params["width"] = max_width
@@ -268,7 +325,8 @@ class GenerateNAID:
                 print("ignore error:", e)
             else:
                 raise e
-
+        # NAI用wait 多分5秒で大丈夫
+        time.sleep(5)
         return (image,)
 
 
@@ -432,6 +490,8 @@ class DeclutterAugment:
         return base_augment(self.access_token, self.output_dir, limit_opus_free, ignore_errors, "declutter", image)
 
 
+
+
 NODE_CLASS_MAPPINGS = {
     "GenerateNAID": GenerateNAID,
     "ModelOptionNAID": ModelOption,
@@ -447,10 +507,11 @@ NODE_CLASS_MAPPINGS = {
     "ColorizeNAID": ColorizeAugment,
     "EmotionNAID": EmotionAugment,
     "DeclutterNAID": DeclutterAugment,
+
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "GenerateNAID": "Generate ✒️🅝🅐🅘",
-    "ModelOptionNAID": "ModelOption ✒️🅝🅐🅘",
+    "ModelOptionNAID": "MOD ModelOption ✒️🅝🅐🅘",
     "Img2ImgOptionNAID": "Img2ImgOption ✒️🅝🅐🅘",
     "InpaintingOptionNAID": "InpaintingOption ✒️🅝🅐🅘",
     "VibeTransferOptionNAID": "VibeTransferOption ✒️🅝🅐🅘",
@@ -463,4 +524,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "ColorizeNAID": "Colorize ✒️🅝🅐🅘",
     "EmotionNAID": "Emotion ✒️🅝🅐🅘",
     "DeclutterNAID": "Declutter ✒️🅝🅐🅘",
+
 }
